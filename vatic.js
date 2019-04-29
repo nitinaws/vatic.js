@@ -54,7 +54,8 @@ function extractFramesFromVideo(config, file, progress) {
       video.muted = true;
       video.loop = false;
       video.playbackRate = config.playbackRate;
-      video.src = URL.createObjectURL(file);
+      //video.src = URL.createObjectURL(file);
+      video.src = file;
       compatibility.requestAnimationFrame(onBrowserAnimationFrame);
       video.play();
     });

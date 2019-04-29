@@ -1,0 +1,184 @@
+
+<script src="https://assets.crowd.aws/crowd-html-elements.js"></script>
+<script type="text/javascript" src="https://s3.amazonaws.com/groundtruthnw/vaticjs/dist/compatibility.js"></script>
+<script type="text/javascript" src="https://s3.amazonaws.com/groundtruthnw/vaticjs/dist/jszip.js"></script>
+<script type="text/javascript" src="https://s3.amazonaws.com/groundtruthnw/vaticjs/dist/StreamSaver.js"></script>
+<script type="text/javascript" src="https://s3.amazonaws.com/groundtruthnw/vaticjs/dist/polyfill.js"></script>
+<script type="text/javascript" src="https://s3.amazonaws.com/groundtruthnw/vaticjs/dist/jsfeat.js"></script>
+<script type="text/javascript" src="https://s3.amazonaws.com/groundtruthnw/vaticjs/dist/nudged.js"></script>
+<script type="text/javascript" src="https://s3.amazonaws.com/groundtruthnw/vaticjs/dist/pouchdb.min.js"></script>
+<script type="text/javascript" src="https://s3.amazonaws.com/groundtruthnw/vaticjs/dist/jquery-1.12.4.js"></script>
+<script type="text/javascript" src="https://s3.amazonaws.com/groundtruthnw/vaticjs/dist/jquery-ui.js"></script>
+<script type="text/javascript" src="https://s3.amazonaws.com/groundtruthnw/vaticjs/vatic-2539230298.js"></script>
+<script type="text/javascript" src="https://s3.amazonaws.com/groundtruthnw/vaticjs/dist/vatic-helper-2539230298.js"></script>
+
+<meta http-equiv="content-type" content="text/html; charset=utf-8">
+<title>SageMaker Ground Truth Annotations</title>
+<style>
+  .output { font-family: monospace; font-weight: bold; }
+
+  #doodle {
+    position: relative;
+    width: 0px;
+    height: 0px;
+    z-index: 2;
+  }
+
+  #canvas {
+    z-index: 1;
+  }
+
+  .bbox {
+    border: 1px solid #FF0000;
+    position: absolute;
+    z-index: 3;
+  }
+
+  .handle, .ui-resizable-handle {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 0, 0, .5);
+    background-color: rgba(255, 255, 0, .05);
+    position: absolute;
+  }
+
+  .center-drag {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    cursor: move;
+  }
+
+  .ui-resizable-n {
+    left: 50%;
+    transform: translate(-50%, -50%);
+    cursor: n-resize;
+  }
+
+  .ui-resizable-s {
+    left: 50%;
+    bottom: 0%;
+    transform: translate(-50%, 50%);
+    cursor: s-resize;
+  }
+
+  .ui-resizable-w {
+    top: 50%;
+    transform: translate(-50%, -50%);
+    cursor: w-resize;
+  }
+
+  .ui-resizable-e {
+    right: 0%;
+    top: 50%;
+    transform: translate(50%, -50%);
+    cursor: e-resize;
+  }
+
+  .ui-slider {
+    position: relative;
+    text-align: left;
+    height: .8em;
+  }
+
+  .ui-slider-handle {
+    position: absolute;
+    z-index: 2;
+    width: 1.2em;
+    height: 1.2em;
+    cursor: default;
+    -ms-touch-action: none;
+    touch-action: none;
+    top: -.3em;
+    margin-left: -.6em;
+  }
+
+  .ui-widget.ui-widget-content {
+    border: 1px solid #d3d3d3;
+  }
+
+  .ui-state-default {
+    border: 1px solid #d3d3d3;
+    background-color: #e6e6e6;
+  }
+
+  .ui-state-hover, .ui-state-focus {
+    border: 1px solid #999999;
+    background-color: #dadada;
+  }
+
+  .ui-state-active {
+    border: 1px solid #aaaaaa;
+    background-color: #ffffff;
+  }
+
+  .ui-state-disabled {
+    opacity: .35;
+  }
+
+  .ui-corner-all {
+    border-radius: 4px;
+  }
+</style>
+
+<h1>Worker Instructions</h1>
+<div id='video-url' style="display: none;">
+  {{ task.input.taskObject | grant_read_access }}
+</div>
+<ol>
+  <li>
+    <!--        <p>To start a new video annotation, select a video file: <input type="file" id="videoFile" accept="video/*" /></p>-->
+    <p style="display: none;">To resume a previous annotation, select a frames zip archive: <input type="file" id="zipFile" accept=".zip" /></p>
+    <p>Note: Keep the focus on the browser during the entire extraction process, or frames might be skipped.</p>
+    <p class="output" id="videoDimensions"></p>
+    <p class="output" id="extractionProgress"></p>
+  </li>
+  <li style="display: none;">
+    <p>Download the extracted frames zip archive: <input type="button" id="downloadFrames" value="Get frames zip archive" disabled="disabled" /></p>
+  </li>
+  <li style="display: none;">
+    <p>Optional: Load an existing <a href="http://web.mit.edu/vondrick/vatic/" target="new">vatic</a>-compatible XML annotation file: <input type="file" id="xmlFile" accept=".xml" disabled="true" /></p>
+    <p>This is useful for example if:</p>
+    <ul>
+      <li>You are resuming a previous annotation.</li>
+      <li>You already have a first version of your automatic object detector, which you want to improve by manually correcting its errors.</li>
+    </ul>
+    <p>Note: Launch your object detector on the extracted frames rather than on the original video to avoid frame/annotation mismatches!</p>
+  </li>
+  <li>
+    <p>Manually annotate the frame sequence:</p>
+    <p>To create a new bounding box, first click 'n' (for new), and then left click on two locations in the video corresponding to the corners of the box.</p>
+    <p>Tip: Use the spacebar to play/pause the video, and the left and right arrows to navigate frame by frame.</p>
+    <p>Tip: The visibility of each object can be toogled with its visiblity checkbox under the video.</p>
+    <p>Tip: Zoom in with your browser to place the bounding boxes more accurately.</p>
+    <div id="doodle">
+      <canvas id="canvas"></canvas>
+    </div>
+    <p><input type="button" id="play" value="Play" disabled="true" /><input type="button" id="pause" value="Pause" disabled="true" style="display: none;" /></p>
+    <div id="slider"></div>
+    <p><label for="speed">Speed multiplier: </label><input type="text" id="speed" value="1.00" size="4" /></p>
+    <div id="objects"></div>
+  </li>
+  <li style="display: none;">
+    <p><input type="button" id="generateXml" value="Generate" disabled="true" /> the <a href="http://web.mit.edu/vondrick/vatic/" target="new">vatic</a>-compatible XML annotations file.</p>
+  </li>
+</ol>
+
+<crowd-form>
+  <input name="annotations" id="annotations" type="hidden">
+
+  <!-- Prevent crowd-form from creating its own button -->
+  <crowd-button form-action="submit" style="display: none;"></crowd-button>
+</crowd-form>
+
+<crowd-button id="submitButton">Submit</crowd-button>
+
+<script>
+  document.querySelector('crowd-form').onsubmit = function() {
+    document.getElementById('annotations').value = xmlToJson();
+  };
+  document.getElementById('submitButton').onclick = function() {
+    document.querySelector('crowd-form').submit();
+  };
+</script>
